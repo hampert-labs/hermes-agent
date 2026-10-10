@@ -1773,6 +1773,13 @@ export const esOverrides = {
       clear: 'Limpiar'
     },
     connections: {
+      showInSessions: 'Mostrar en la navegación de Sesiones',
+      sessionsHiddenPill: 'Oculto en la navegación de Sesiones',
+      sessionsVisibilityNote:
+        'Ocultar solo quita el gateway y sus perfiles de la navegación de Sesiones en este escritorio. Las conexiones, credenciales, opciones de inicio, modo Bots, capacidades y trabajo en curso no cambian.',
+      sessionsVisibilityActive: 'El gateway activo siempre permanece visible.',
+      sessionsVisibilityUnavailable: 'Recarga o actualiza Desktop para cambiar la visibilidad.',
+      sessionsVisibilityLast: 'Mantén al menos un gateway visible.',
       title: 'Gateways registrados',
       intro:
         'Gestiona este dispositivo y cada gateway de Hermes al que puede llegar mediante conexiones remotas, SSH o Cloud.',

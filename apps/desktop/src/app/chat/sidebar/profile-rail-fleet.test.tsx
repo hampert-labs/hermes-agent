@@ -3,7 +3,10 @@ import { atom } from 'nanostores'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { DesktopAgentRoster, DesktopConnectionsRegistry } from '@/global'
+import { $sessionNavigationConnections, setConnectionShownInSessions } from '@/store/connection-navigation'
 
+import { ConnectionSwitcher } from './connection-switcher'
+import { ProfileSwitcher } from './profile-dropdown-switcher'
 import { ProfileRail } from './profile-switcher'
 
 // The fleet rail: with several registered gateways, every gateway's agents sit
@@ -109,6 +112,7 @@ vi.mock('@/store/connections', () => ({
   $activeConnectionId: atom<null | string>(null),
   $connectionsRegistry: atom<DesktopConnectionsRegistry | null>(null),
   $hasMultipleConnections: atom(false),
+  $pendingConnectionId: atom(null),
   selectConnection: (...args: unknown[]) => selectConnection(...args)
 }))
 
@@ -154,9 +158,21 @@ const { _resetFleetRosterForTests } = await import('@/store/fleet-roster')
 
 const registry: DesktopConnectionsRegistry = {
   connections: [
-    { id: 'local', kind: 'local', label: 'This device' },
-    { id: 'gateway-a', kind: 'remote', label: 'Gateway A', url: 'https://gateway-a.example.com' },
-    { id: 'gateway-b', kind: 'ssh', label: 'Gateway B', host: 'gateway-b.example.com' }
+    { id: 'local', incarnation: '00000000-0000-4000-8000-000000000001', kind: 'local', label: 'This device' },
+    {
+      id: 'gateway-a',
+      incarnation: '00000000-0000-4000-8000-000000000002',
+      kind: 'remote',
+      label: 'Gateway A',
+      url: 'https://gateway-a.example.com'
+    },
+    {
+      id: 'gateway-b',
+      incarnation: '00000000-0000-4000-8000-000000000003',
+      kind: 'ssh',
+      label: 'Gateway B',
+      host: 'gateway-b.example.com'
+    }
   ],
   launchMode: 'primary',
   lastUsed: 'gateway-a',
@@ -234,8 +250,17 @@ beforeEach(() => {
   ;(window as { hermesDesktop?: unknown }).hermesDesktop = { getAgentRoster, openWindow, probeLocalBackend }
 })
 
-afterEach(() => {
+afterEach(async () => {
   cleanup()
+  // Drain Radix unmount autofocus before the old jsdom realm is retired.
+  await act(async () => {
+    await new Promise(resolve => setTimeout(resolve, 0))
+  })
+
+  for (const id of ['local', 'gateway-a', 'gateway-b']) {
+    setConnectionShownInSessions(id, true)
+  }
+
   $profileOrder.set([])
   vi.clearAllMocks()
   vi.restoreAllMocks()
@@ -247,6 +272,59 @@ afterEach(() => {
   profiles.set([{ is_default: true, name: 'default' }])
   delete (window as { hermesDesktop?: unknown }).hermesDesktop
 })
+
+it.each(['expanded', 'condensed', 'rail-hidden', 'gateway-switcher'])(
+  'keeps the sole registered gateway selectable with an unresolved active source: %s',
+  async path => {
+    armFleet()
+    setConnectionShownInSessions('local', false)
+    setConnectionShownInSessions('gateway-b', false)
+    activeConnectionId.set(null)
+    expect($sessionNavigationConnections.get().map(connection => connection.id)).toEqual(['gateway-a'])
+    expect(selectConnection).not.toHaveBeenCalled()
+
+    if (path === 'condensed') {
+      profiles.set(Array.from({ length: 15 }, (_, index) => ({ is_default: index === 0, name: `p${index}` })))
+    }
+
+    if (path === 'gateway-switcher') {
+      const view = render(<ConnectionSwitcher onConnect={navigate} />)
+      const trigger = view.container.querySelector('[data-slot="connection-switcher"] button')
+      expect(trigger).not.toBeNull()
+      fireEvent.pointerDown(trigger!, { button: 0, ctrlKey: false })
+      fireEvent.click(screen.getByRole('menuitemradio', { name: /Gateway A/ }))
+    } else if (path === 'rail-hidden') {
+      render(<ProfileSwitcher compact />)
+      await act(async () => {
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      fireEvent.pointerDown(screen.getByRole('button', { name: 'Profiles: default' }), { button: 0, ctrlKey: false })
+      const group = document.querySelector('[data-slot="profile-switcher-gateway"][data-connection-id="gateway-a"]')
+      expect(group).not.toBeNull()
+      fireEvent.click(within(group as HTMLElement).getByRole('menuitem', { name: /scout/ }))
+    } else {
+      const view = await renderFleet()
+
+      if (path === 'condensed') {
+        fireEvent.pointerDown(screen.getByRole('button', { name: 'Profiles' }), { button: 0, ctrlKey: false })
+        const group = document.querySelector('[data-slot="profile-dropdown-gateway"][data-connection-id="gateway-a"]')
+        expect(group).not.toBeNull()
+        fireEvent.click(within(group as HTMLElement).getByRole('menuitem', { name: /scout/ }))
+      } else {
+        expect(view.querySelector('[data-slot="profile-rail-gateway"][data-connection-id="gateway-a"]')).not.toBeNull()
+        fireEvent.click(screen.getByRole('button', { name: 'scout · Gateway A' }))
+      }
+    }
+
+    await act(async () => void (await Promise.resolve()))
+    expect(selectConnection).toHaveBeenCalledWith(
+      'gateway-a',
+      ...(path === 'gateway-switcher' ? [] : [{ profile: 'scout' }])
+    )
+    expect(activeConnectionId.get()).toBeNull()
+  }
+)
 
 describe('ProfileRail overflow', () => {
   // jsdom drops valid gradient values containing calc(); observe the real DOM
@@ -338,6 +416,69 @@ describe('ProfileRail overflow', () => {
 })
 
 describe('ProfileRail fleet mode', () => {
+  it.each([false, true])('removes a hidden gateway and all its profiles (condensed=%s)', async condensed => {
+    armFleet()
+    getAgentRoster.mockResolvedValue({
+      ...roster,
+      agents: [
+        ...roster.agents,
+        {
+          connectionId: 'gateway-b',
+          connectionKind: 'ssh',
+          connectionLabel: 'Gateway B',
+          profile: 'builder',
+          handle: 'builder-b'
+        }
+      ]
+    })
+
+    if (condensed) {
+      profiles.set([
+        ...profiles.get(),
+        ...Array.from({ length: 12 }, (_, index) => ({ is_default: false, name: `p${index}` }))
+      ])
+    }
+
+    const container = await renderFleet()
+    act(() => setConnectionShownInSessions('local', false))
+
+    if (condensed) {
+      fireEvent.pointerDown(screen.getByRole('button', { name: 'Profiles' }), { button: 0, ctrlKey: false })
+    }
+
+    expect(document.querySelector('[data-connection-id="local"]')).toBeNull()
+    expect(screen.queryByRole(condensed ? 'menuitem' : 'button', { name: /builder · This device/ })).toBeNull()
+    expect(screen.getByRole(condensed ? 'menuitemradio' : 'button', { name: 'scout' })).toBeTruthy()
+    const builder = screen.getByRole(condensed ? 'menuitem' : 'button', { name: 'builder · Gateway B' })
+    await act(async () => fireEvent.click(builder))
+    expect(selectConnection).toHaveBeenCalledWith('gateway-b', { profile: 'builder' })
+    expect(selectProfile).not.toHaveBeenCalled()
+    expect(probeLocalBackend).not.toHaveBeenCalled()
+    expect(connectionsRegistry.get()).toBe(registry)
+    expect(activeConnectionId.get()).toBe('gateway-a')
+
+    if (!condensed) {
+      expect(container.querySelector('[data-slot="profile-rail-divider"][data-connection-id="local"]')).toBeNull()
+    }
+  })
+
+  it('counts visible profiles only when leaving the condensed rail', async () => {
+    armFleet()
+    profiles.set([
+      { is_default: true, name: 'default' },
+      ...Array.from({ length: 11 }, (_, index) => ({ is_default: false, name: `p${index}` }))
+    ])
+    const container = await renderFleet()
+    expect(container.querySelector('[data-slot="profile-dropdown"]')).toBeTruthy()
+    act(() => setConnectionShownInSessions('local', false))
+    expect(container.querySelector('[data-slot="profile-dropdown"]')).toBeNull()
+    expect(screen.getByRole('button', { name: 'p0' })).toBeTruthy()
+    act(() => setConnectionShownInSessions('gateway-b', false))
+    expect(container.querySelector('[data-slot="profile-rail-divider"]')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Manage gateways…' })).toBeTruthy()
+    expect(hasMultipleConnections.get()).toBe(true)
+  })
+
   it.each([false, true])(
     'keeps right-click launch routes exact without selecting a profile (condensed=%s)',
     async condensed => {

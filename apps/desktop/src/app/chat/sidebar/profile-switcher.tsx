@@ -60,12 +60,8 @@ import {
 } from '@/lib/reorder'
 import { useStoreSelector } from '@/lib/use-session-slice'
 import { cn } from '@/lib/utils'
-import {
-  $activeConnectionId,
-  $connectionsRegistry,
-  $hasMultipleConnections,
-  selectConnection
-} from '@/store/connections'
+import { $hasSessionNavigationChoices, $sessionNavigationConnections } from '@/store/connection-navigation'
+import { $activeConnectionId, $hasMultipleConnections, selectConnection } from '@/store/connections'
 import { $fleetRoster, refreshFleetRoster } from '@/store/fleet-roster'
 import { notify, notifyError } from '@/store/notifications'
 import {
@@ -184,9 +180,9 @@ const stepThroughCells: Modifier = ({ containerNodeRect, draggingNodeRect, trans
 // left, the colored named profiles scrolling between, and Manage pinned right.
 // The active profile pops in its own color — the "where am I" cue.
 //
-// With one registered gateway this is the whole story. With several, the rail
+// With one visible, identified active gateway this is the whole story. Otherwise the rail
 // becomes the FLEET rail: the active gateway's profiles stay exactly as they
-// are, and every other registered gateway follows on the same strip as an
+// are, and every other visible gateway follows on the same strip as an
 // at-rest group — a hairline, that gateway's kind glyph, its default home
 // square and its named squares, dimmed. Clicking an at-rest square performs
 // the same re-home the statusbar switcher does, landing on that exact
@@ -202,8 +198,9 @@ export function ProfileRail() {
   const order = useStore($profileOrder)
   const colors = useStore($profileColors)
   const remoteOverrides = useStore($profileRemoteOverrides)
-  const multipleConnections = useStore($hasMultipleConnections)
-  const registry = useStore($connectionsRegistry)
+  const registeredMultipleConnections = useStore($hasMultipleConnections)
+  const multipleConnections = useStore($hasSessionNavigationChoices)
+  const connections = useStore($sessionNavigationConnections)
   const activeConnectionId = useStore($activeConnectionId)
   const roster = useStore($fleetRoster)
   const navigate = useNavigate()
@@ -225,13 +222,12 @@ export function ProfileRail() {
   const [dragging, setDragging] = useState(false)
   const { dialog: localDeviceDialog, request: requestLocalDevice } = useLocalDeviceSwitch()
 
-  useFleetRoster(multipleConnections)
-
-  const connections = registry?.connections
+  // Presentation preferences must not change roster ownership or discovery.
+  useFleetRoster(registeredMultipleConnections)
 
   const restGroups = useMemo(
     () =>
-      multipleConnections ? buildRestGroups({ activeConnectionId, connections: connections ?? [], order, roster }) : [],
+      multipleConnections ? buildRestGroups({ activeConnectionId, connections, order, roster }) : [],
     [activeConnectionId, connections, multipleConnections, order, roster]
   )
 
@@ -242,14 +238,14 @@ export function ProfileRail() {
 
   // Registry order for the whole strip, active group included — the active
   // gateway keeps its slot instead of jumping to the front on a switch.
-  const activeConnection = connections?.find(connection => connection.id === activeConnectionId) ?? null
+  const activeConnection = connections.find(connection => connection.id === activeConnectionId) ?? null
   // Named picks on This device retain the legacy profile door, which resolves
   // per-profile remote overrides. At-rest fleet actions keep their exact source.
   const namedProfileConnectionId = activeConnectionId === LOCAL_CONNECTION_ID ? null : activeConnectionId
 
   const fleetSequence = useMemo(() => {
     const byId = new Map(restGroups.map(group => [group.connectionId, group]))
-    const ordered = sortConnectionsForDisplay(connections ?? [])
+    const ordered = sortConnectionsForDisplay(connections)
     const sequence: Array<{ kind: 'active' } | { group: FleetGroup; kind: 'rest' }> = []
     let activePlaced = false
 
@@ -494,7 +490,9 @@ export function ProfileRail() {
                   // gateway registry; once the rail shows machines directly
                   // it only confuses, so it is offered on single-gateway
                   // setups only.
-                  onConnectRemote={multipleConnections ? undefined : () => openRemoteOverrideDialog(profile.name)}
+                  onConnectRemote={
+                    registeredMultipleConnections ? undefined : () => openRemoteOverrideDialog(profile.name)
+                  }
                   onDelete={() => setPendingDelete(profile)}
                   onEditSoul={() => setPendingSoul(profile.name)}
                   onRecolor={color => setProfileColor(profile.name, color)}
@@ -1159,9 +1157,9 @@ function FleetDivider({
   return label ? <Tip label={label}>{marker}</Tip> : marker
 }
 
-// One at-rest gateway on the fleet rail: hairline + kind glyph (amber dot when
-// the roster last found it unreachable — never hidden, a sleeping box is still
-// yours), then its home square and named squares, dimmed. Clicking any of
+// One visible at-rest gateway on the fleet rail: hairline + kind glyph (amber
+// dot when unreachable — reachability alone never hides a registered choice),
+// then its home square and named squares, dimmed. Clicking any of
 // them re-homes onto that exact (gateway, profile).
 function FleetRestGroup({
   colors,

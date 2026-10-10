@@ -1779,6 +1779,13 @@ export const frOverrides = {
       clear: 'Effacer'
     },
     connections: {
+      showInSessions: 'Afficher dans la navigation des sessions',
+      sessionsHiddenPill: 'Masquée dans la navigation des sessions',
+      sessionsVisibilityNote:
+        'Masquer retire seulement la gateway et ses profils de la navigation des sessions sur ce bureau. Les connexions, identifiants, choix de démarrage, mode Bots, capacités et travaux en cours restent inchangés.',
+      sessionsVisibilityActive: 'La gateway active reste toujours visible.',
+      sessionsVisibilityUnavailable: 'Rechargez ou mettez à jour Desktop pour modifier la visibilité.',
+      sessionsVisibilityLast: 'Gardez au moins une gateway visible.',
       title: 'Connexions',
       intro:
         'Enregistrez tous les emplacements où vivent vos agents : cet appareil, les gateways distantes de votre réseau et les instances Hermes Cloud. Ils sont tous conservés ici.',

@@ -19,12 +19,8 @@ import { triggerHaptic } from '@/lib/haptics'
 import { Loader2 } from '@/lib/icons'
 import { resolveProfileColor } from '@/lib/profile-color'
 import { cn } from '@/lib/utils'
-import {
-  $activeConnectionId,
-  $connectionsRegistry,
-  $hasMultipleConnections,
-  selectConnection
-} from '@/store/connections'
+import { $hasSessionNavigationChoices, $sessionNavigationConnections } from '@/store/connection-navigation'
+import { $activeConnectionId, $hasMultipleConnections, selectConnection } from '@/store/connections'
 import { $fleetRoster } from '@/store/fleet-roster'
 import { notifyError } from '@/store/notifications'
 import {
@@ -71,15 +67,16 @@ export function ProfileSwitcher({ compact = false }: { compact?: boolean }) {
   const colors = useStore($profileColors)
   const gatewayProfile = useStore($activeGatewayProfile)
   const showAll = useStore($showAllProfiles)
-  const multipleConnections = useStore($hasMultipleConnections)
-  const registry = useStore($connectionsRegistry)
+  const registeredMultipleConnections = useStore($hasMultipleConnections)
+  const multipleConnections = useStore($hasSessionNavigationChoices)
+  const connections = useStore($sessionNavigationConnections)
   const activeConnectionId = useStore($activeConnectionId)
   const roster = useStore($fleetRoster)
   const [createOpen, setCreateOpen] = useState(false)
   const [pendingRoute, setPendingRoute] = useState<null | string>(null)
   const { dialog: localDeviceDialog, request: requestLocalDevice } = useLocalDeviceSwitch()
 
-  useFleetRoster(multipleConnections)
+  useFleetRoster(registeredMultipleConnections)
 
   // The `profile.create` hotkey bumps this request atom; the rail answers it
   // while mounted, so with the rail hidden this picker owns the dialog instead.
@@ -96,11 +93,9 @@ export function ProfileSwitcher({ compact = false }: { compact?: boolean }) {
     setCreateOpen(true)
   }, [createRequest])
 
-  const connections = registry?.connections
-
   const restGroups = useMemo(
     () =>
-      multipleConnections ? buildRestGroups({ activeConnectionId, connections: connections ?? [], order, roster }) : [],
+      multipleConnections ? buildRestGroups({ activeConnectionId, connections, order, roster }) : [],
     [activeConnectionId, connections, multipleConnections, order, roster]
   )
 

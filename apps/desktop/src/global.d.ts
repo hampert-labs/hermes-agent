@@ -1085,6 +1085,9 @@ export type DesktopConnectionKind = 'cloud' | 'local' | 'remote' | 'ssh'
 // the IPC boundary (preview + set flag instead, like DesktopConnectionConfig).
 export interface DesktopRegistryConnection {
   id: string
+  // Native-owned immutable registration identity, used only for presentation.
+  // Absent on older mains/recovery snapshots: visibility defaults on.
+  incarnation?: string
   kind: DesktopConnectionKind
   // Required, registry-unique device name ("Homelab", "Work laptop").
   label: string

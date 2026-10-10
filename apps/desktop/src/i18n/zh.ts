@@ -1461,6 +1461,13 @@ export const zh = defineLocale({
     },
     // v2 多连接注册表：设置 → 网关。
     connections: {
+      showInSessions: '在会话导航中显示',
+      sessionsHiddenPill: '已从会话导航中隐藏',
+      sessionsVisibilityNote:
+        '隐藏仅从本桌面的会话导航中移除网关及其配置档案。连接、凭据、启动选择、机器人模式、能力和正在运行的工作均不变。',
+      sessionsVisibilityActive: '活动网关始终保持可见。',
+      sessionsVisibilityUnavailable: '请重新加载或更新 Desktop 以更改可见性。',
+      sessionsVisibilityLast: '请至少保留一个可见网关。',
       title: '已注册网关',
       intro: '管理本机以及通过远程、SSH 或 Hermes Cloud 连接可访问的每个 Hermes 网关。',
       stagedNote:

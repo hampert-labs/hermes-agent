@@ -27,6 +27,8 @@
  * these into the IPC layer and owns file I/O + secret encryption.
  */
 
+import { randomUUID } from 'node:crypto'
+
 import {
   hostLabelFromBaseUrl,
   modeIsRemoteLike,
@@ -48,6 +50,8 @@ export type ConnectionKind = 'cloud' | 'local' | 'remote' | 'ssh'
 
 export interface RegistryConnection {
   id: string
+  /** Native-owned presentation identity; absent only before on-disk migration. */
+  incarnation?: string
   kind: ConnectionKind
   /** Required, unique (case-insensitive) display name — the "device name". */
   label: string
@@ -969,10 +973,13 @@ export function normalizeConnectionInput(input: ConnectionInput, registry: Conne
   }
 
   const kind = input.kind
+  // Save payloads cannot choose identity, even if extra IPC fields are supplied.
+  const existing = registry.connections.find(c => c.id === (kind === 'local' ? LOCAL_CONNECTION_ID : input.id))
+  const incarnation = existing?.incarnation ?? randomUUID()
 
   if (kind === 'local') {
     // The local entry is managed by the app; only its label is editable.
-    return { id: LOCAL_CONNECTION_ID, kind: 'local', label }
+    return { id: LOCAL_CONNECTION_ID, incarnation, kind: 'local', label }
   }
 
   // The reserved local id can never be claimed by a non-local entry — a
@@ -1020,7 +1027,7 @@ export function normalizeConnectionInput(input: ConnectionInput, registry: Conne
       throw new Error(`A connection to this SSH host already exists ("${sshDupe.label}").`)
     }
 
-    const entry: RegistryConnection = { id, kind: 'ssh', label, ...sshFields }
+    const entry: RegistryConnection = { id, incarnation, kind: 'ssh', label, ...sshFields }
 
     // Carry the adopted session-token envelope across edits (mirrors the remote
     // branch): dropping it made a label rename wipe the backend's reuse
@@ -1051,7 +1058,7 @@ export function normalizeConnectionInput(input: ConnectionInput, registry: Conne
 
     // Cloud never stores a token (below), so it is always oauth.
     const authMode = storedAuthMode(kind, input.authMode, undefined)
-    const entry: RegistryConnection = { id, kind, label, url, authMode }
+    const entry: RegistryConnection = { id, incarnation, kind, label, url, authMode }
 
     // A token is only meaningful for token-auth remotes. Dropping it here is
     // what clears the stale envelope when an entry is switched token→oauth
@@ -1192,6 +1199,30 @@ export function connectionDialFieldsChanged(before: RegistryConnection, after: R
 
 // ── Registry-level operations (all pure: return a new registry) ────────────
 
+/** Assign only missing/invalid legacy metadata at the native persistence boundary.
+ * Persist synchronously before exposing identities, using the registry's existing
+ * atomic writer. Normalization itself never mints an identity. A failed write
+ * propagates rather than publishing an incarnation that cannot survive restart.
+ */
+export function migrateRegistryIncarnations(
+  registry: ConnectionRegistry,
+  persist: (registry: ConnectionRegistry) => void
+): ConnectionRegistry {
+  if (registry.connections.every(connection => connection.incarnation)) {
+    return registry
+  }
+
+  const migrated = {
+    ...registry,
+    connections: registry.connections.map(connection =>
+      connection.incarnation ? connection : { ...connection, incarnation: randomUUID() }
+    )
+  }
+  persist(migrated)
+
+  return migrated
+}
+
 function localEntry(label = 'This device'): RegistryConnection {
   return { id: LOCAL_CONNECTION_ID, kind: 'local', label }
 }
@@ -1290,6 +1321,12 @@ export function normalizeRegistry(raw: unknown): ConnectionRegistry {
       seenIds.add(id)
 
       const clean: RegistryConnection = { id, kind, label }
+      if (
+        typeof entry.incarnation === 'string' &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(entry.incarnation)
+      ) {
+        clean.incarnation = entry.incarnation
+      }
 
       if (kind === 'remote' || kind === 'cloud') {
         const url = String(entry.url || '').trim()

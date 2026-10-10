@@ -81,6 +81,46 @@ cron stay scoped to that gateway; the app-managed window backend is still chosen
 by the connection-mode controls above. **Primary** is the registry fallback and
 does not switch the current workspace.
 
+## Choosing which gateways appear in Sessions navigation
+
+Each row in **Settings → Gateways → Registered gateways** has a **Show in
+Sessions navigation** switch. It starts on for every gateway, including
+**This device**. Turn it off for an inactive gateway to remove its glyph and
+all its profiles from the fleet profile rail, the condensed rail menu, the
+statusbar gateway selector, and the profile dropdown used when the rail is hidden.
+Navigation layout and condensation thresholds count only visible choices.
+
+The gateway stays registered in Settings, marked **Hidden from Sessions
+navigation**. Turn the switch back on there to recover it, even while the
+gateway is offline. This desktop remembers the preference by connection ID and
+a native-owned immutable registration incarnation. Both survive an app restart;
+renaming a gateway or editing its endpoint preserves them. Removing and adding
+a registration creates a new incarnation and starts visible, even if its label
+reuses the same routing ID. Delayed registry snapshots or old removal notifications
+do not reset a hide made for the replacement registration.
+
+Existing registry entries receive their incarnation once through an atomic native
+registry update, without changing routing IDs or saved credentials. The unshipped
+experimental ID-only visibility keys are ignored, not migrated or deleted. An older
+Desktop main process or recovery snapshot without incarnation metadata stays visible;
+reload or update Desktop to enable its visibility switch. Preference storage is
+best-effort if the desktop's local storage is unavailable.
+
+The active execution gateway always remains visible and its switch cannot be
+turned off. If an explicit route, another desktop window, or startup activates
+a previously hidden gateway, it is shown while active without changing the
+stored preference. Settings still shows the hidden badge and unchecked switch;
+turn that switch on to restore it permanently, including while it is active.
+At least one navigation choice is kept available; local-only setups retain their usual defaults.
+Changing visibility never switches the current gateway or profile.
+
+This is a **presentation preference, not an execution or security restriction**.
+It does not remove registry entries or credentials, change Primary or remembered
+startup choices, stop backends or tunnels, or alter session ownership and runtime
+routing. Bot Mode's rows, metadata and completions, the Capabilities scope
+selector, and the raw fleet roster are unchanged. Hiding **This device** does
+not prevent the local backend from starting or guarantee remote-only execution.
+
 ## Organizing session groups
 
 In the Sessions sidebar's view menu, choose **Gateway & profile** while viewing
@@ -204,9 +244,10 @@ The sidebar foot follows one hierarchy: **gateway → profile → sessions**.
 Gateways are machines or hosted backends; profiles are isolated Hermes agents
 that live on one gateway.
 
-- With one registered gateway, no gateway control is added. Local-only Desktop
+- With one visible gateway choice identified as active, no gateway control is added.
+  An unresolved active source still leaves that registered choice selectable. Local-only Desktop
   keeps the same profile rail and keyboard flow as before.
-- With several gateways, the sidebar shows one named gateway selector. Its device,
+- With several visible gateways, the sidebar shows one named gateway selector. Its device,
   cloud, network, or terminal icon identifies the connection type; profile
   avatars remain a separate control after the divider. The same selector scales
   from two gateways to a larger fleet without turning backends into profile-like
@@ -215,7 +256,7 @@ that live on one gateway.
   returns to its default profile and the layers pill shows **All profiles on
   this gateway**. **Cmd/Ctrl+1–9** continue to switch profiles within the
   active gateway whenever no pane has a tab strip to claim them.
-- With several gateways the profile rail is a **fleet rail**: every registered
+- With several visible gateways the profile rail is a **fleet rail**: every visible
   gateway's profiles sit on the one strip, each group headed by that gateway's
   kind glyph (device, network, terminal, cloud) — the same glyph the gateway
   selector uses. The active gateway's squares look exactly as they do on a

@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useConnectionsRegistry } from './use-connections-registry'
 
 vi.mock('@/store/connections', () => ({
+  $activeConnectionId: atom(null),
+  $connectionsRegistry: atom(null),
   initializeConnectionsRegistry: vi.fn(async () => null),
   refreshConnectionsRegistry: vi.fn(async () => null)
 }))

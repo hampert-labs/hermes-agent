@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Input } from '@/components/ui/input'
 import { Loader } from '@/components/ui/loader'
+import { Switch } from '@/components/ui/switch'
 import type {
   DesktopConnectionKind,
   DesktopConnectionsRegistry,
@@ -21,6 +22,12 @@ import {
 } from '@/lib/connection-display'
 import { triggerHaptic } from '@/lib/haptics'
 import { Cloud, Globe, Loader2, Monitor, Pencil, Plus, RefreshCw, SearchIcon, Terminal, Trash2 } from '@/lib/icons'
+import {
+  $hiddenSessionConnectionIds,
+  $sessionNavigationConnections,
+  encodeConnectionPresentationId,
+  setConnectionShownInSessions
+} from '@/store/connection-navigation'
 import { $activeConnectionId, setConnectionsRegistry } from '@/store/connections'
 import { refreshFleetRoster } from '@/store/fleet-roster'
 import { notify, notifyError } from '@/store/notifications'
@@ -221,6 +228,8 @@ export function ConnectionsRegistrySection() {
   const { t } = useI18n()
   const s = t.settings.connections
   const activeConnectionId = useStore($activeConnectionId)
+  const navigationConnections = useStore($sessionNavigationConnections)
+  const hiddenConnectionIds = useStore($hiddenSessionConnectionIds)
   const [registry, setRegistry] = useState<DesktopConnectionsRegistry | null>(null)
   const [loading, setLoading] = useState(true)
   const [editor, setEditor] = useState<EditorState | null>(null)
@@ -378,6 +387,7 @@ export function ConnectionsRegistrySection() {
         }
 
         const result = await bridge.save(payload)
+
         publishRegistry(result.registry)
         setEditor(null)
         setPlainTextConfirm(false)
@@ -593,6 +603,9 @@ export function ConnectionsRegistrySection() {
       <p className="mb-4 text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
         {s.stagedNote}
       </p>
+      <p className="mb-4 text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
+        {s.sessionsVisibilityNote}
+      </p>
 
       {!loading && showSearch && (
         <Input
@@ -618,6 +631,9 @@ export function ConnectionsRegistrySection() {
         displayedConnections.map(conn => {
           const Icon = KIND_ICONS[conn.kind]
           const isCurrent = activeConnectionId === conn.id
+          const shownInSessions = !hiddenConnectionIds.includes(conn.id)
+          const cannotHide = shownInSessions && (isCurrent || navigationConnections.length <= 1)
+          const descriptionId = `sessions-visibility-${encodeConnectionPresentationId(conn.id)}`
           const isPrimary = registry.primary === conn.id
           const busy = busyId === conn.id
           // Display-only: this connection is a second address for a backend
@@ -674,6 +690,31 @@ export function ConnectionsRegistrySection() {
                   )}
                 </div>
               }
+              below={
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
+                  <Switch
+                    aria-describedby={isCurrent || cannotHide || !conn.incarnation ? descriptionId : undefined}
+                    aria-label={`${s.showInSessions}: ${conn.label}`}
+                    checked={shownInSessions}
+                    disabled={cannotHide || !conn.incarnation}
+                    onCheckedChange={shown => {
+                      triggerHaptic('selection')
+                      setConnectionShownInSessions(conn.id, shown)
+                    }}
+                    size="xs"
+                  />
+                  <span>{s.showInSessions}</span>
+                  {(isCurrent || cannotHide || !conn.incarnation) && (
+                    <span id={descriptionId}>
+                      {!conn.incarnation
+                        ? s.sessionsVisibilityUnavailable
+                        : isCurrent
+                          ? s.sessionsVisibilityActive
+                          : s.sessionsVisibilityLast}
+                    </span>
+                  )}
+                </div>
+              }
               description={
                 sameBackendPeer ? `${baseDescription} · ${s.sameBackendHint(sameBackendPeer)}` : baseDescription
               }
@@ -685,6 +726,7 @@ export function ConnectionsRegistrySection() {
                   {isCurrent && <Pill tone="primary">{s.currentPill}</Pill>}
                   {isPrimary && <Pill>{s.primaryPill}</Pill>}
                   {conn.kind === 'local' && <Pill>{s.managedPill}</Pill>}
+                  {!shownInSessions && <Pill>{s.sessionsHiddenPill}</Pill>}
                 </span>
               }
             />

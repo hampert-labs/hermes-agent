@@ -1435,7 +1435,7 @@ test('ssh input requires a host; local input only carries the label', () => {
   const local = normalizeConnectionInput({ kind: 'local', label: 'My MacBook' }, registry)
 
   assert.equal(local.id, LOCAL_CONNECTION_ID)
-  assert.deepEqual(Object.keys(local).sort(), ['id', 'kind', 'label'])
+  assert.deepEqual(Object.keys(local).sort(), ['id', 'incarnation', 'kind', 'label'])
 })
 
 // --- normalizeRegistry ---

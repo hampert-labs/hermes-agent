@@ -1251,6 +1251,13 @@ export const ru = defineLocale({
     },
     // v2 multi-connection registry: Settings → Gateways.
     connections: {
+      showInSessions: 'Показывать в навигации «Сеансов»',
+      sessionsHiddenPill: 'Скрыт из навигации «Сеансов»',
+      sessionsVisibilityNote:
+        'Скрытие убирает только шлюз и его профили из навигации «Сеансов» на этом компьютере. Соединения, учётные данные, выбор при запуске, режим ботов, возможности и текущая работа не меняются.',
+      sessionsVisibilityActive: 'Активный шлюз всегда остаётся видимым.',
+      sessionsVisibilityUnavailable: 'Перезагрузите или обновите Desktop, чтобы изменить видимость.',
+      sessionsVisibilityLast: 'Оставьте хотя бы один шлюз видимым.',
       title: 'Зарегистрированные шлюзы',
       intro:
         'Управляйте этим устройством и всеми шлюзами Hermes, до которых можно дотянуться через удалённые, SSH или Cloud-соединения.',

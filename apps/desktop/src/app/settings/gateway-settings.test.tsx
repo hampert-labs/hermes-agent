@@ -7,11 +7,15 @@ import { deferred } from '@/test/deferred'
 // Collect the component graph before the behavioral test deadline starts.
 import { GatewaySettings } from './gateway-settings'
 
-const { registry, activeId, selectConnection } = vi.hoisted(() => ({
-  registry: { value: null as any },
-  activeId: { value: 'saved-b' },
-  selectConnection: vi.fn().mockResolvedValue(undefined)
-}))
+const { registry, activeId, selectConnection } = await vi.hoisted(async () => {
+  const { atom } = await import('nanostores')
+
+  return {
+    registry: atom<any>(null),
+    activeId: atom('saved-b'),
+    selectConnection: vi.fn().mockResolvedValue(undefined)
+  }
+})
 
 vi.mock('@nanostores/react', () => ({ useStore: (store: any) => store.value }))
 vi.mock('@/store/connections', () => ({
@@ -19,7 +23,7 @@ vi.mock('@/store/connections', () => ({
   $activeConnectionId: activeId,
   refreshConnectionsRegistry: vi.fn().mockResolvedValue(null),
   selectConnection,
-  setConnectionsRegistry: vi.fn()
+  setConnectionsRegistry: vi.fn(value => registry.set(value))
 }))
 vi.mock('./connections-registry', async importOriginal => ({
   ...(await importOriginal<any>()),
@@ -54,6 +58,8 @@ const localConnection = {
 }
 
 beforeEach(() => {
+  registry.set(null)
+  activeId.set('saved-b')
   getConnectionConfig.mockResolvedValue(localConnection)
   saveConnectionConfig.mockResolvedValue(localConnection)
   Object.defineProperty(window, 'hermesDesktop', {
@@ -226,7 +232,7 @@ describe('GatewaySettings', () => {
       org: 'old-team'
     }
 
-    registry.value = { connections: [saved] }
+    registry.set({ connections: [saved] })
     getConnectionConfig.mockResolvedValue({
       ...localConnection,
       mode: 'cloud',
@@ -274,16 +280,16 @@ describe('GatewaySettings', () => {
     expect(agentSignIn).toHaveBeenCalledWith(saved.url)
     expect(save).toHaveBeenCalledWith({ ...saved, org: 'new-team' })
     expect(saveConnectionConfig).not.toHaveBeenCalled()
-    registry.value = null
+    registry.set(null)
   })
   it('keeps saved Cloud instances usable without discovery and marks the live source, not the default', async () => {
     getConnectionConfig.mockResolvedValue({ ...localConnection, mode: 'cloud', remoteUrl: 'https://a.example' })
-    registry.value = {
+    registry.set({
       connections: [
         { id: 'saved-a', kind: 'cloud', label: 'Research', url: 'https://a.example', authMode: 'oauth' },
         { id: 'saved-b', kind: 'cloud', label: 'Writing', url: 'https://b.example', authMode: 'oauth' }
       ]
-    }
+    })
     const agentSignIn = vi.fn()
     const applyConnectionConfig = vi.fn()
     Object.assign(window.hermesDesktop, {
@@ -301,10 +307,10 @@ describe('GatewaySettings', () => {
     expect(screen.getByText('Active in this window')).toBeTruthy()
     expect(agentSignIn).not.toHaveBeenCalled()
     expect(applyConnectionConfig).not.toHaveBeenCalled()
-    registry.value = null
+    registry.set(null)
   })
   it('authenticates and saves only the chosen discovered instance with its friendly name', async () => {
-    registry.value = null
+    registry.set(null)
     getConnectionConfig.mockResolvedValue({ ...localConnection, mode: 'cloud' })
     const agentSignIn = vi.fn().mockResolvedValue({ connected: true })
     const applyConnectionConfig = vi.fn().mockResolvedValue({ ...localConnection, mode: 'cloud' })
@@ -436,7 +442,7 @@ describe('GatewaySettings', () => {
 
     const mountCloudPanelWith = (cloud: Record<string, unknown>) => {
       getConnectionConfig.mockResolvedValue({ ...localConnection, mode: 'cloud', remoteUrl: saved.url })
-      registry.value = { connections: [saved] }
+      registry.set({ connections: [saved] })
       Object.assign(window.hermesDesktop, { cloud })
     }
 
@@ -461,7 +467,7 @@ describe('GatewaySettings', () => {
       expect(window.hermesDesktop!.cloud!.agentSignIn).toHaveBeenCalledWith(saved.url)
       // The portal session was already live: no interactive portal login.
       expect(window.hermesDesktop!.cloud!.login).not.toHaveBeenCalled()
-      registry.value = null
+      registry.set(null)
     })
 
     it('fails closed instead of cascading against an empty saved dashboard URL', async () => {
@@ -473,7 +479,7 @@ describe('GatewaySettings', () => {
       }
 
       getConnectionConfig.mockResolvedValue({ ...localConnection, mode: 'cloud', remoteUrl: '' })
-      registry.value = { connections: [savedWithoutUrl] }
+      registry.set({ connections: [savedWithoutUrl] })
       const agentSignIn = vi.fn()
       const oauthLogoutConnectionConfig = vi.fn()
       Object.assign(window.hermesDesktop, {
@@ -493,7 +499,7 @@ describe('GatewaySettings', () => {
       await waitFor(() => expect(selectConnection).toHaveBeenCalledTimes(1))
       expect(oauthLogoutConnectionConfig).not.toHaveBeenCalled()
       expect(agentSignIn).not.toHaveBeenCalled()
-      registry.value = null
+      registry.set(null)
     })
 
     it('does not cascade for a non-reauth switch failure', async () => {
@@ -513,7 +519,7 @@ describe('GatewaySettings', () => {
       await waitFor(() => expect(selectConnection).toHaveBeenCalledTimes(1))
       expect(oauthLogoutConnectionConfig).not.toHaveBeenCalled()
       expect(window.hermesDesktop!.cloud!.agentSignIn).not.toHaveBeenCalled()
-      registry.value = null
+      registry.set(null)
     })
 
     it('signs into the portal first when that session has lapsed too', async () => {
@@ -533,7 +539,7 @@ describe('GatewaySettings', () => {
       await waitFor(() => expect(selectConnection).toHaveBeenCalledTimes(2))
       expect(window.hermesDesktop!.cloud!.login).toHaveBeenCalledTimes(1)
       expect(window.hermesDesktop!.cloud!.agentSignIn).toHaveBeenCalledWith(saved.url)
-      registry.value = null
+      registry.set(null)
     })
   })
 

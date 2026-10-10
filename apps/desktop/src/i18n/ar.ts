@@ -479,6 +479,15 @@ export const ar = defineLocale({
     noResults: 'لا توجد لغة مطابقة'
   },
   settings: {
+    connections: {
+      showInSessions: 'إظهار في تنقّل الجلسات',
+      sessionsHiddenPill: 'مخفي من تنقّل الجلسات',
+      sessionsVisibilityNote:
+        'الإخفاء يزيل البوابة وملفاتها الشخصية فقط من تنقّل الجلسات على هذا الجهاز. لا تتغير الاتصالات وبيانات الاعتماد وخيارات بدء التشغيل ووضع الروبوتات والقدرات والعمل الجاري.',
+      sessionsVisibilityActive: 'تبقى البوابة النشطة ظاهرة دائمًا.',
+      sessionsVisibilityUnavailable: 'أعد تحميل Desktop أو حدّثه لتغيير الظهور.',
+      sessionsVisibilityLast: 'أبقِ بوابة واحدة على الأقل ظاهرة.'
+    },
     subpages: {
       appearanceTheme: 'السمة',
       appearanceTypography: 'الخطوط والتحجيم',

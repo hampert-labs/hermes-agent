@@ -1522,6 +1522,13 @@ export const en: Translations = {
     },
     // v2 multi-connection registry: Settings → Gateways.
     connections: {
+      showInSessions: 'Show in Sessions navigation',
+      sessionsHiddenPill: 'Hidden from Sessions navigation',
+      sessionsVisibilityNote:
+        'Hiding a gateway only removes it and its profiles from Sessions navigation on this desktop. Connections, credentials, startup choices, Bot Mode, capabilities, and running work are unchanged.',
+      sessionsVisibilityActive: 'The active gateway always stays visible.',
+      sessionsVisibilityUnavailable: 'Reload or update Desktop to change visibility.',
+      sessionsVisibilityLast: 'Keep at least one gateway visible.',
       title: 'Registered gateways',
       intro: 'Manage this device and every Hermes gateway it can reach through remote, SSH, or Cloud connections.',
       stagedNote:

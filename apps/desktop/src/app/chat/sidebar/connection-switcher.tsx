@@ -25,7 +25,8 @@ import {
 import { triggerHaptic } from '@/lib/haptics'
 import { Loader2 } from '@/lib/icons'
 import { cn } from '@/lib/utils'
-import { $activeConnectionId, $connectionsRegistry, $pendingConnectionId, selectConnection } from '@/store/connections'
+import { $sessionNavigationConnections } from '@/store/connection-navigation'
+import { $activeConnectionId, $pendingConnectionId, selectConnection } from '@/store/connections'
 import { closeFindBar } from '@/store/find-in-page'
 import { notifyError } from '@/store/notifications'
 
@@ -34,7 +35,7 @@ import { useLocalDeviceSwitch } from './local-device-switch'
 
 export function ConnectionSwitcher({ compact = false, onConnect }: { compact?: boolean; onConnect: () => void }) {
   const { t } = useI18n()
-  const registry = useStore($connectionsRegistry)
+  const navigationConnections = useStore($sessionNavigationConnections)
   const activeConnectionId = useStore($activeConnectionId)
   const pendingConnectionId = useStore($pendingConnectionId)
   const [searchQuery, setSearchQuery] = useState('')
@@ -43,7 +44,7 @@ export function ConnectionSwitcher({ compact = false, onConnect }: { compact?: b
   const searchInputRef = useRef<HTMLInputElement>(null)
   const { dialog: localDeviceDialog, request: requestLocalDevice } = useLocalDeviceSwitch()
 
-  const connections = useMemo(() => sortConnectionsForDisplay(registry?.connections ?? []), [registry?.connections])
+  const connections = useMemo(() => sortConnectionsForDisplay(navigationConnections), [navigationConnections])
 
   const activeConnection = connections.find(connection => connection.id === activeConnectionId)
   const searchable = connections.length >= CONNECTION_SEARCH_THRESHOLD
@@ -88,7 +89,7 @@ export function ConnectionSwitcher({ compact = false, onConnect }: { compact?: b
     return () => window.removeEventListener('keydown', closeOnEscape, { capture: true })
   }, [menuOpen])
 
-  if (connections.length <= 1) {
+  if (connections.length === 0 || (connections.length === 1 && activeConnection)) {
     return null
   }
 

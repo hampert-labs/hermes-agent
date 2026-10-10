@@ -6,6 +6,8 @@ import { _resetFleetRosterForTests, refreshFleetRoster } from '@/store/fleet-ros
 import { $connection } from '@/store/session'
 import { deferred } from '@/test/deferred'
 
+import { ConnectionSwitcher } from '../chat/sidebar/connection-switcher'
+
 import {
   ConnectionsRegistrySection,
   findDuplicateConnection,
@@ -23,10 +25,18 @@ const test = vi.fn()
 
 const registry: DesktopConnectionsRegistry = {
   connections: [
-    { id: 'local', kind: 'local', label: 'This device', tokenPreview: null, tokenSet: false },
+    {
+      id: 'local',
+      incarnation: '00000000-0000-4000-8000-000000000001',
+      kind: 'local',
+      label: 'This device',
+      tokenPreview: null,
+      tokenSet: false
+    },
     {
       authMode: 'token',
       id: 'homelab',
+      incarnation: '00000000-0000-4000-8000-000000000004',
       kind: 'remote',
       label: 'Homelab',
       tokenPreview: '...abc123',
@@ -63,6 +73,57 @@ beforeEach(() => {
   })
 })
 
+it('native lone-surrogate IDs survive publication, Settings descriptions and independent hide keys', async () => {
+  const nativePath = String('../../../electron/connection-registry.ts')
+  const { normalizeRegistry, migrateRegistryIncarnations } = await import(/* @vite-ignore */ nativePath)
+  const ids = ['bad\ud800id', 'bad\udc00id', 'bad\ufffdid', 'bad%uD800id', 'bad😀id']
+  const native = migrateRegistryIncarnations(normalizeRegistry({
+    version: 2, primary: 'homelab', connections: [
+      ...registry.connections,
+      ...ids.map((id, i) => ({ id, kind: 'ssh', label: `Malformed ${i}`, host: 'synthetic.invalid',
+        incarnation: '00000000-0000-4000-8000-000000000009' }))
+    ]
+  }), () => undefined)
+  const snapshot = { ...native, secureTokenStorage: true,
+    connections: native.connections.map((c: Record<string, unknown>) => ({ ...c, tokenPreview: null, tokenSet: false })) }
+  list.mockResolvedValue(snapshot)
+  const { setConnectionsRegistry } = await import('@/store/connections')
+  const { $hiddenSessionConnectionIds, setConnectionShownInSessions } = await import('@/store/connection-navigation')
+  expect(() => setConnectionsRegistry(snapshot)).not.toThrow()
+  expect(snapshot.connections.slice(-ids.length).map((c: { id: string }) => c.id)).toEqual(ids)
+  render(<ConnectionsRegistrySection />)
+  const descriptions: string[] = []
+  for (let i = 0; i < ids.length; i++) {
+    const toggle = await screen.findByRole('switch', { name: `Show in Sessions navigation: Malformed ${i}` })
+    act(() => $connection.set({ ...$connection.get()!, connectionId: ids[i] }))
+    descriptions.push(toggle.getAttribute('aria-describedby')!)
+    expect(document.getElementById(descriptions[i])).toBeTruthy()
+    act(() => $connection.set({ ...$connection.get()!, connectionId: 'homelab' }))
+    fireEvent.click(toggle)
+    expect($hiddenSessionConnectionIds.get()).toContain(ids[i])
+  }
+  expect(new Set(descriptions).size).toBe(ids.length)
+  act(() => setConnectionShownInSessions(ids[0], true))
+  act(() => setConnectionsRegistry({ ...snapshot }))
+  expect($hiddenSessionConnectionIds.get()).not.toContain(ids[0])
+  for (const id of ids.slice(1)) {
+    expect($hiddenSessionConnectionIds.get()).toContain(id)
+  }
+  expect(snapshot.connections.slice(-ids.length).map((c: { id: string }) => c.id)).toEqual(ids)
+})
+
+it('explains unavailable visibility on a pre-incarnation native snapshot', async () => {
+  list.mockResolvedValue({
+    ...registry,
+    connections: registry.connections.map(({ incarnation: _identity, ...c }) => c)
+  })
+  render(<ConnectionsRegistrySection />)
+  const toggle = await screen.findByRole('switch', { name: 'Show in Sessions navigation: This device' })
+  expect(toggle.getAttribute('aria-checked')).toBe('true')
+  expect((toggle as HTMLButtonElement).disabled).toBe(true)
+  expect(screen.getAllByText('Reload or update Desktop to change visibility.').length).toBeGreaterThan(0)
+})
+
 afterEach(() => {
   $connection.set(null)
   cleanup()
@@ -70,6 +131,63 @@ afterEach(() => {
 })
 
 describe('ConnectionsRegistrySection', () => {
+  it('distinguishes a hidden preference from temporary active visibility and permits restoration', async () => {
+    const { setConnectionsRegistry } = await import('@/store/connections')
+    const { setConnectionShownInSessions } = await import('@/store/connection-navigation')
+    setConnectionsRegistry(registry)
+    setConnectionShownInSessions('local', false)
+    $connection.set({ ...$connection.get()!, connectionId: 'local' })
+    render(<ConnectionsRegistrySection />)
+    const toggle = await screen.findByRole('switch', { name: 'Show in Sessions navigation: This device' })
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    expect(toggle.hasAttribute('disabled')).toBe(false)
+    expect(screen.getByText('Hidden from Sessions navigation')).toBeTruthy()
+    expect(document.getElementById(toggle.getAttribute('aria-describedby')!)).toBeTruthy()
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-checked')).toBe('true')
+    expect(toggle.hasAttribute('disabled')).toBe(true)
+    expect(screen.queryByText('Hidden from Sessions navigation')).toBeNull()
+  })
+
+  it('hides and recovers This device without changing the registry or active source', async () => {
+    const active = $connection.get()
+    const { $connectionsRegistry } = await import('@/store/connections')
+
+    const view = render(
+      <>
+        <ConnectionsRegistrySection />
+        <ConnectionSwitcher onConnect={vi.fn()} />
+      </>
+    )
+
+    const toggle = await screen.findByRole('switch', { name: 'Show in Sessions navigation: This device' })
+    expect(toggle.getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Registered gateways: Homelab' })).toBeTruthy()
+
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    expect(screen.getByText('Hidden from Sessions navigation')).toBeTruthy()
+    expect(screen.getByText('This device')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Registered gateways: Homelab' })).toBeNull()
+    expect($connectionsRegistry.get()).toBe(registry)
+    expect($connection.get()).toBe(active)
+    expect(save).not.toHaveBeenCalled()
+    expect(remove).not.toHaveBeenCalled()
+    expect(setPrimary).not.toHaveBeenCalled()
+    expect(setLaunchMode).not.toHaveBeenCalled()
+    expect(test).not.toHaveBeenCalled()
+
+    // Recovery is local presentation state: it works without contacting a gateway.
+    view.unmount()
+    render(<ConnectionsRegistrySection />)
+    const recover = await screen.findByRole('switch', { name: 'Show in Sessions navigation: This device' })
+    expect(recover.getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(recover)
+    expect(recover.getAttribute('aria-checked')).toBe('true')
+    expect(screen.queryByText('Hidden from Sessions navigation')).toBeNull()
+    expect($connection.get()).toBe(active)
+  })
+
   it('preserves, replaces and deletes stored headers through plaintext consent without selecting a source', async () => {
     const active = $connection.get()
 

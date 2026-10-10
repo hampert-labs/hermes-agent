@@ -2,6 +2,8 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { atom } from 'nanostores'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { DesktopConnectionsRegistry } from '@/global'
+
 import { ProfileRail } from './profile-switcher'
 
 // The rail's discoverability pills are navigation, not identity — assert the
@@ -24,6 +26,13 @@ vi.mock('@/i18n', () => ({
         connectGateway: 'Manage gateways…',
         failedLoadSoul: 'Failed to load SOUL.md',
         failedSaveSoul: 'Failed to save SOUL.md',
+        fleet: {
+          allOnGateway: (gateway: string) => `All profiles on ${gateway}`,
+          gateway: (gateway: string) => `Profiles on ${gateway}`,
+          gatewayUnreachable: (gateway: string) => `${gateway} · unreachable`,
+          localDevice: 'This device',
+          onGateway: (name: string, gateway: string) => `${name} · ${gateway}`
+        },
         importProfile: 'Import profile…',
         manageProfiles: 'Manage profiles…',
         newProfile: 'New profile',
@@ -65,8 +74,8 @@ vi.mock('@/store/profile', () => ({
 }))
 
 vi.mock('@/store/connections', () => ({
-  $activeConnectionId: atom(null),
-  $connectionsRegistry: atom(null),
+  $activeConnectionId: atom<null | string>(null),
+  $connectionsRegistry: atom<DesktopConnectionsRegistry | null>(null),
   $hasMultipleConnections: atom(false),
   selectConnection: vi.fn()
 }))
@@ -90,7 +99,7 @@ vi.mock('../../profiles/create-profile-dialog', () => ({ CreateProfileDialog: ()
 vi.mock('../../profiles/delete-profile-dialog', () => ({ DeleteProfileDialog: () => null }))
 vi.mock('../../profiles/rename-profile-dialog', () => ({ RenameProfileDialog: () => null }))
 
-const { $hasMultipleConnections } = await import('@/store/connections')
+const { $activeConnectionId, $connectionsRegistry, $hasMultipleConnections } = await import('@/store/connections')
 const hasMultipleConnections = $hasMultipleConnections as ReturnType<typeof atom<boolean>>
 const { $profiles } = await import('@/store/profile')
 const profiles = $profiles as ReturnType<typeof atom<Array<{ is_default: boolean; name: string }>>>
@@ -98,6 +107,8 @@ const profiles = $profiles as ReturnType<typeof atom<Array<{ is_default: boolean
 afterEach(() => {
   cleanup()
   hasMultipleConnections.set(false)
+  $connectionsRegistry.set(null)
+  ;($activeConnectionId as ReturnType<typeof atom<null | string>>).set(null)
   profiles.set([{ is_default: true, name: 'default' }])
 })
 
@@ -122,6 +133,16 @@ describe('ProfileRail multi-gateway entry point', () => {
 
   it('keeps the active profile explicit when gateway identity moves to the statusbar', () => {
     hasMultipleConnections.set(true)
+    $connectionsRegistry.set({
+      version: 2,
+      secureTokenStorage: true,
+      primary: 'local',
+      connections: [
+        { id: 'local', kind: 'local', label: 'This device', tokenSet: false, tokenPreview: null },
+        { id: 'remote', kind: 'remote', label: 'Homelab', tokenSet: false, tokenPreview: null }
+      ]
+    })
+    ;($activeConnectionId as ReturnType<typeof atom<null | string>>).set('local')
     render(<ProfileRail />)
 
     expect(screen.getByRole('button', { name: 'default' })).toBeTruthy()

@@ -402,6 +402,15 @@ export const zhHant = defineLocale({
   },
 
   settings: {
+    connections: {
+      showInSessions: '在工作階段導覽中顯示',
+      sessionsHiddenPill: '已從工作階段導覽中隱藏',
+      sessionsVisibilityNote:
+        '隱藏只會從此桌面的工作階段導覽中移除閘道及其設定檔。連線、憑證、啟動選擇、機器人模式、功能與正在執行的工作均不變。',
+      sessionsVisibilityActive: '使用中的閘道一律保持可見。',
+      sessionsVisibilityUnavailable: '請重新載入或更新 Desktop 以變更可見性。',
+      sessionsVisibilityLast: '請至少保留一個可見的閘道。'
+    },
     subpages: {
       appearanceTheme: '主題',
       appearanceTypography: '字體與縮放',

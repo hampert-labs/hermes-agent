@@ -61,7 +61,9 @@ export function useConnectionsRegistry(): void {
       }
     }
 
+    // Even an obsolete removal may refresh the roster, never write preferences.
     const off = window.hermesDesktop?.connections?.onChanged?.(() => void refresh())
+
     window.addEventListener('focus', onFocus)
     void refresh()
 

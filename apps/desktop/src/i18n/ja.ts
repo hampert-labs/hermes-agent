@@ -417,6 +417,15 @@ export const ja = defineLocale({
   },
 
   settings: {
+    connections: {
+      showInSessions: 'セッションのナビゲーションに表示',
+      sessionsHiddenPill: 'セッションのナビゲーションで非表示',
+      sessionsVisibilityNote:
+        '非表示にすると、このデスクトップのセッションのナビゲーションからゲートウェイとそのプロファイルだけが除外されます。接続、認証情報、起動時の選択、Bot モード、機能、実行中の作業は変わりません。',
+      sessionsVisibilityActive: 'アクティブなゲートウェイは常に表示されます。',
+      sessionsVisibilityUnavailable: '表示設定を変更するには Desktop を再読み込みまたは更新してください。',
+      sessionsVisibilityLast: '少なくとも一つのゲートウェイを表示してください。'
+    },
     uninstallSection: {
       dangerZone: '危険ゾーン',
       checkingInstalled: 'インストール内容を確認中…',

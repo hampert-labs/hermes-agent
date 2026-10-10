@@ -180,6 +180,7 @@ import {
   connectionDialFieldsChanged,
   connectionIdForPendingLogin,
   mergeConnectionInput,
+  migrateRegistryIncarnations,
   migrateV1ToRegistry,
   normalizeConnectionInput,
   normalizeRegistry,
@@ -9225,7 +9226,7 @@ function readDesktopConnectionsRegistry() {
     registry = migrateV1ToRegistry(readDesktopConnectionConfig())
 
     try {
-      writeDesktopConnectionsRegistry(registry)
+      registry = migrateRegistryIncarnations(registry, writeDesktopConnectionsRegistry)
     } catch {
       // Write failed (full disk, read-only userData). Keep the migrated
       // registry in memory so list/save keep working this session instead of
@@ -9237,11 +9238,13 @@ function readDesktopConnectionsRegistry() {
     return connectionRegistryCache
   }
 
+  let parsedRegistry = false
   try {
     // Same rationale as connection.json: tighten BEFORE parse so a corrupt
     // file that still holds token bytes gets its mode fixed anyway.
     tightenSecretFileMode(DESKTOP_CONNECTIONS_REGISTRY_PATH)
     registry = normalizeRegistry(JSON.parse(fs.readFileSync(DESKTOP_CONNECTIONS_REGISTRY_PATH, 'utf8')))
+    parsedRegistry = true
   } catch {
     // Whole-file corruption (truncated write, mangled hand-edit). The
     // degraded local-only registry keeps boot working, but the file BYTES are
@@ -9250,6 +9253,22 @@ function readDesktopConnectionsRegistry() {
     // (#94246: recovery must never be data loss).
     preserveCorruptRegistrySidecar()
     registry = normalizeRegistry(null)
+  }
+
+  // All renderer windows share this synchronous native read/write boundary.
+  // Do not expose new presentation identities until the atomic write succeeds.
+  if (parsedRegistry) {
+    try {
+      const migrated = migrateRegistryIncarnations(registry, writeDesktopConnectionsRegistry)
+      if (migrated !== registry) {
+        registry = migrated
+        mtime = connectionRegistryCacheMtime
+      }
+    } catch {
+      // Optional presentation metadata must not prevent reading routing/credentials.
+      // Preserve the normalized persisted snapshot and retry on the next read.
+      mtime = null
+    }
   }
 
   if (registry?.quarantined?.length) {
@@ -9266,6 +9285,7 @@ function readDesktopConnectionsRegistry() {
   const reconciled = reconcileRegistryDrift(registry, readDesktopConnectionConfig())
 
   if (reconciled.changed) {
+    const persistedIncarnations = new Map(registry.connections.map(connection => [connection.id, connection.incarnation]))
     registry = reconciled.registry
 
     try {
@@ -9273,6 +9293,18 @@ function readDesktopConnectionsRegistry() {
 
       return connectionRegistryCache
     } catch {
+      // Keep the existing routing fallback, but only publish identities read
+      // from disk. A drift-created entry is not durable until repair succeeds.
+      registry = {
+        ...registry,
+        connections: registry.connections.map(connection => {
+          if (connection.incarnation === persistedIncarnations.get(connection.id)) {
+            return connection
+          }
+          const { incarnation: _nonDurable, ...persistedConnection } = connection
+          return persistedConnection
+        })
+      }
       connectionRegistryCache = registry
       connectionRegistryCacheMtime = null
 

@@ -1776,6 +1776,13 @@ export const deOverrides = {
       clear: 'Leeren'
     },
     connections: {
+      showInSessions: 'In der Sessions-Navigation anzeigen',
+      sessionsHiddenPill: 'Aus der Sessions-Navigation ausgeblendet',
+      sessionsVisibilityNote:
+        'Ausblenden entfernt nur das Gateway und seine Profile aus der Sessions-Navigation auf diesem Desktop. Verbindungen, Zugangsdaten, Startauswahl, Bot-Modus, Fähigkeiten und laufende Arbeit bleiben unverändert.',
+      sessionsVisibilityActive: 'Das aktive Gateway bleibt immer sichtbar.',
+      sessionsVisibilityUnavailable: 'Desktop neu laden oder aktualisieren, um die Sichtbarkeit zu ändern.',
+      sessionsVisibilityLast: 'Mindestens ein Gateway muss sichtbar bleiben.',
       title: 'Registrierte Gateways',
       intro:
         'Verwalten Sie dieses Gerät und jedes Hermes Gateway, das es über Remote-, SSH- oder Cloud-Verbindungen erreichen kann.',

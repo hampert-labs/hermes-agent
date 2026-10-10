@@ -1277,6 +1277,12 @@ export interface Translations {
       title: string
       intro: string
       stagedNote: string
+      showInSessions: string
+      sessionsHiddenPill: string
+      sessionsVisibilityNote: string
+      sessionsVisibilityActive: string
+      sessionsVisibilityLast: string
+      sessionsVisibilityUnavailable: string
       launchModeTitle: string
       launchModeDesc: string
       searchPlaceholder: string
